@@ -210,7 +210,7 @@ class FiP:
 					properties = properties2
 		
 		if properties is None:
-			if flags:
+			if flags and settings.debug_mode:
 				return self.word + repr(flags)
 			else:
 				return self.word
@@ -386,6 +386,9 @@ class FiA:
 			ans = ""
 			for expr in self.exprs:
 				word = expr.inflect(flags).strip()
+				if ans.endswith("nen"):
+					ans = ans[:-3] + "s"
+				
 				if " " in word:
 					if ans:
 						ans += "- "
@@ -404,7 +407,7 @@ class FiA:
 				word = expr.inflect(flags).strip()
 				if ans and ans[-1] == "-" and " " not in ans and " " not in word:
 					ans = ans[:-1]
-				elif ans:
+				elif ans and word:
 					ans += " "
 				
 				ans += word

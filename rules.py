@@ -61,34 +61,77 @@ def treeToStr(tree):
 		words.append(treeToStr(subtree))
 	return " ".join(words)
 
+def treeToCode(tree):
+	ans = ""
+	if "_del" in tree:
+		ans += "*"
+	
+	for code, pre, post in [("_name", "", "@"), ("arc", "", "="), ("POS_coarse", "", ""), ("POS_fine", ".", ""), ("word", ":", ""), ("lemma", "/", "")]:
+		if code in tree and tree[code]:
+			ans += pre
+			if isinstance(tree[code], set) or isinstance(tree[code], dict):
+				if len(tree[code]) > 5:
+					ans += "<set of " + str(len(tree[code])) + " items>"
+				else:
+					ans += repr(tree[code])
+			elif not isinstance(tree[code], str):
+				ans += repr(tree[code])
+			else:
+				ans += tree[code]
+			
+			ans += post
+	
+	if "modifiers" in tree:
+		ans += "[" + ", ".join(treeToCode(subtree) for subtree in tree["modifiers"]) + "]"
+	
+	if "_not" in tree:
+		ans += " && not " + treeToCode(tree["_not"])
+	
+	return ans
+
+translate_indent = 0
+
 def translate(tree, rules):
+	global translate_indent
+	translate_indent += 1
 	if settings.debug_mode:
-		print("translate(" + tree["word"] + ", ", end="")
+		print(translate_indent*" " + "translate(" + tree["word"] + ", ", end="")
 		if rules == AP_RULES:
-			print("AP_RULES)")
+			print("AP_RULES)", end="")
 		elif rules == ADVP_RULES:
-			print("ADVP_RULES)")
+			print("ADVP_RULES)", end="")
 		elif rules == NP_RULES:
-			print("NP_RULES)")
+			print("NP_RULES)", end="")
 		elif rules == VP_RULES:
-			print("VP_RULES)")
+			print("VP_RULES)", end="")
+		elif rules == PP_RULES:
+			print("PP_RULES)", end="")
 		elif rules == PHRASE_RULES:
-			print("PHRASE_RULES)")
+			print("PHRASE_RULES)", end="")
 		else:
-			print("<rules#"+str(len(rules))+">)")
+			print("<rules#"+str(len(rules))+">)", end="")
 	
 	for i, rule in enumerate(rules):
 		ctree = copy.deepcopy(tree)
 		m, d = rule.matches(ctree)
 		if m:
-			return rule.translate(ctree, d, rules[i:])
+			if settings.debug_mode:
+				print(" -> match " + treeToCode(rule.pattern))
+			
+			ans = rule.translate(ctree, d, rules[i:])
+			translate_indent -= 1
+			return ans
 	
+	if settings.debug_mode:
+		print(" -> no match")
+	
+	translate_indent -= 1
 	return FiNI("[" + treeToStr(tree) + "]")
 
 def translateRest(tree):
 	ts = []
 	for subtree in tree["modifiers"]:
-		ts.append(translateUnknownPos(subtree).inflect(set()))
+		ts.append(translateUnknownPos(subtree))
 	return FiA(ts, no_forwarding=True)
 
 def translateRestToArray(tree):
@@ -98,6 +141,9 @@ def translateRestToArray(tree):
 	return ts
 
 def translateUnknownPos(tree):
+	if settings.debug_mode:
+		print(" "*translate_indent + "translateUnknownPos("+tree["POS_coarse"]+":"+tree["word"] + "): ", end="")
+	
 	if tree["POS_coarse"] == "ADJ":
 		return translate(tree, AP_RULES)
 	elif tree["POS_coarse"] == "ADV" or tree["arc"] == "npadvmod":
@@ -108,6 +154,11 @@ def translateUnknownPos(tree):
 		return translate(tree, VP_RULES)
 	elif tree["POS_coarse"] == "ADP":
 		return translate(tree, PP_RULES)
+	elif tree["POS_coarse"] == "PUNCT":
+		if tree["word"] in ['"', "'", ":", "!", "?"]:
+			return FiNI(tree["word"])
+		else:
+			return FiNI("")
 	else:
 		return FiNI("[" + treeToStr(tree) + "]")
 
@@ -171,6 +222,13 @@ addCConjunction(NP_RULES, NP_RULES, "or", "tai")
 addCConjunction(VP_RULES, VP_RULES, "and", "ja")
 addCConjunction(VP_RULES, VP_RULES, "but", "vaan")
 addCConjunction(VP_RULES, VP_RULES, "or", "tai")
+
+# tunnistamattomat konjunktiot
+@match(PHRASE_RULES, {"modifiers": [{"_del": True, "_name": "subtree", "arc": "conj", "POS_coarse": "VERB"}]})
+def _(tree, params, rest):
+	val = translate(tree, rest)
+	val2 = translate(params["subtree"], PHRASE_RULES)
+	return FiA([val, FiNI(","), niTree(val2)], val.flags)
 
 # relatiivilauseet
 @match(NP_RULES, {"modifiers": [{"_del": True, "_name": "relcl", "arc": "relcl", "POS_coarse": "VERB"}]})
@@ -244,39 +302,54 @@ def _(tree, params, rest):
 	val2 = translate(params["proper"], NP_RULES)
 	return FiA([niTree(val2, {"genetiivi"}), val], val.flags)
 
-def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_postposition=None, after=False):
+def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_postposition=None, after=False, pp_rule=True, np_rule=True, phrase_rule=True):
 	fi_pre_val = FiNI(fi_preposition or "")
 	fi_post_val = FiNI(fi_postposition or "")
-	@match(PP_RULES, {"word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "_del": True, "POS_coarse": "NOUN"}]})
-	def _(tree, params, rest):
-		val = translateRest(tree)
-		val2 = translate(params["subtree"], NP_RULES)
-		pp = niTree(val2, {case})
-		if after:
-			return FiA([val, fi_pre_val, pp, fi_post_val])
-		else:
-			return FiA([fi_pre_val, pp, fi_post_val, val])
+	if pp_rule:
+		@match(PP_RULES, {"word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "_del": True, "POS_coarse": {"NOUN", "PROPN", "PRON"}}]})
+		def _(tree, params, rest):
+			val = translateRest(tree)
+			val2 = translate(params["subtree"], NP_RULES)
+			pp = niTree(val2, {case})
+			if after:
+				return FiA([val, fi_pre_val, pp, fi_post_val])
+			else:
+				return FiA([fi_pre_val, pp, fi_post_val, val])
+		
+		@match(PP_RULES, {"word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "_del": True, "POS_coarse": {"VERB"}}]})
+		def _(tree, params, rest):
+			val = translateRest(tree)
+			val2 = translate(params["subtree"], VP_RULES)
+			pp = niTree(val2, {case, "-minen"})
+			if after:
+				return FiA([val, fi_pre_val, pp, fi_post_val])
+			else:
+				return FiA([fi_pre_val, pp, fi_post_val, val])
 	
-	@match(NP_RULES, {"modifiers": [{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}]})
-	def _(tree, params, rest):
-		val = translate(tree, rest)
-		val2 = translate(params["subtree"], NP_RULES)
-		pp = niTree(val2, {case})
-		verbp = FiP(verb, {"verbi", "-va"}) if verb else FiNI("")
-		if after:
-			return FiA([val, verbp, fi_pre_val, pp, fi_post_val], val.flags)
-		return FiA([fi_pre_val, pp, fi_post_val, verbp, val], val.flags)
+	if np_rule:
+		@match(NP_RULES, {"modifiers": [{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}]})
+		def _(tree, params, rest):
+			val = translate(tree, rest)
+			val2 = translate(params["subtree"], NP_RULES)
+			pp = niTree(val2, {case})
+			verbp = FiP(verb, {"verbi", "-va"}) if verb else FiNI("")
+			if after:
+				return FiA([val, verbp, fi_pre_val, pp, fi_post_val], val.flags)
+			return FiA([fi_pre_val, pp, fi_post_val, verbp, val], val.flags)
 	
-	@match(PHRASE_RULES, {"word": "was", "POS_fine": "VBD", "modifiers": [
-		{"lemma": "there", "_del": True, "POS_fine": "EX"},
-		{"_name": "subj", "_del": True, "modifiers": [{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}]}
-	]})
-	def _(tree, params, rest):
-		val = translateRest(tree)
-		subj = translate(params["subj"], NP_RULES)
-		place = translate(params["subtree"], NP_RULES)
-		verbp = niTree(FiP(verb or "olla"), {"verbi", "preteriti", "yks_3"})
-		return FiA([niTree(subj, {"nominatiivi"}), verbp, fi_pre_val, niTree(place, {case}), fi_post_val, val])
+	if phrase_rule:
+		@match(PHRASE_RULES, {"word": "was", "POS_fine": "VBD", "modifiers": [
+			{"lemma": "there", "_del": True, "POS_fine": "EX"},
+			{"_name": "subj", "_del": True, "modifiers": [
+				{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}
+			]}
+		]})
+		def _(tree, params, rest):
+			val = translateRest(tree)
+			subj = translate(params["subj"], NP_RULES)
+			place = translate(params["subtree"], NP_RULES)
+			verbp = niTree(FiP(verb or "olla"), {"verbi", "preteriti", "yks_3"})
+			return FiA([niTree(subj, {"nominatiivi"}), verbp, fi_pre_val, niTree(place, {case}), fi_post_val, val])
 	
 	#@match(PHRASE_RULES, {"modifiers": [{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}]})
 	#def _(tree, params, rest):
@@ -284,7 +357,8 @@ def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_post
 	#	val2 = translate(params["subtree"], NP_RULES)
 	#	return FiA([val, niTree(val2, {case})], val.flags)
 
-prepositionToCase("of", "genetiivi")
+prepositionToCase("of", "genetiivi", pp_rule=False)
+prepositionToCase("of", "elatiivi", np_rule=False, phrase_rule=False)
 prepositionToCase("on", "adessiivi", "olla")
 prepositionToCase("at", "adessiivi", "olla")
 prepositionToCase("to", "illatiivi", "mennä")
@@ -366,6 +440,20 @@ def _(tree, params, rest):
 	val = translate(tree, rest)
 	val2 = translate(ap, ADVP_RULES)
 	return FiA([val, niTree(val2)])
+
+# the thing doing -> tekevä asia
+@match(NP_RULES, {"modifiers": [{"_del": True, "_name": "ap", "POS_fine": "VBG", "arc": "acl"}]})
+def _(tree, params, rest):
+	val = translate(tree, rest)
+	val2 = translate(params["ap"], VP_RULES)
+	return FiA([FiA([val2], {"-va"}), val])
+
+# the thing done -> tehty asia
+@match(NP_RULES, {"modifiers": [{"_del": True, "_name": "ap", "POS_fine": "VBD", "arc": "acl"}]})
+def _(tree, params, rest):
+	val = translate(tree, rest)
+	val2 = translate(params["ap"], VP_RULES)
+	return FiA([FiA([val2], {"-tu"}), val])
 
 # komparatiivi
 @match(AP_RULES, {"POS_fine": "JJR"})
@@ -579,6 +667,12 @@ def _(tree, params, rest):
 	val = translate(tree, VP_RULES)
 	return niTree(val, {"verbi", "preteriti", "finiitti"})
 
+# relatiivilauseet voivat olla ing-muodossa, esim. "i don't mind the cat doing it"
+@match(PHRASE_RULES, {"POS_fine": "VBG"})
+def _(tree, params, rest):
+	val = translate(tree, VP_RULES)
+	return niTree(val, {"verbi", "preesens", "finiitti"})
+
 # apuverbin aikamuoto
 @match(PHRASE_RULES, {"POS_fine": {"VBN", "VBG", "VB"}, "modifiers": [{"POS_fine": {"VBZ", "VBP", "MD"}}]})
 def _(tree, params, rest):
@@ -741,21 +835,12 @@ addVerb("notice", "huomata", "partitiivi")
 addVerb("bother", "häiritä", "partitiivi")
 addVerb("become", "tulla", "translatiivi")
 addVerb("compare", "verrata", "partitiivi")
-addVerb("exist", "löytyä", "elatiivi")
+addVerb("compare to", "verrata", "partitiivi")
+addVerb("remind", "muistuttaa", "partitiivi")
 
 # suorita verbien objektittomien muotojen lisääminen (jotka pitää lisätä aina kaikkien muiden muotojen jälkeen)
 for task in queue:
 	task()
-
-def addSubtreeRule(rules):
-	@match(rules, {"modifiers": [{"_del": True, "_name": "subtree"}]})
-	def _(tree, params, rest):
-		val = translate(tree, rest)
-		val2 = translate(params["subtree"], rules)
-		return FiA([val, val2], val.flags)
-
-addSubtreeRule(NP_RULES)
-addSubtreeRule(PHRASE_RULES)
 
 def pronounToNoun(en_noun, fi_noun, flags=None):
 	@match(NP_RULES, {"word": en_noun, "POS_coarse": {"PRON", "DET", "ADJ", "NOUN"}})
@@ -871,6 +956,12 @@ def _(tree, params, rest):
 def _(tree, params, rest):
 	val = translateRest(tree)
 	return FiA([randomTranslation(tree["lemma"], "fi:r"), val])
+
+# night -> yönä (FIXME purkkaa)
+@match(ADVP_RULES, {"POS_coarse": "NOUN"})
+def _(tree, params, rest):
+	val = translate(tree, NP_RULES)
+	return FiA([val], {"essiivi"})
 
 @match(NP_RULES, {"lemma": trans["fi:n"], "POS_fine": "NN"})
 def _(tree, params, rest):
