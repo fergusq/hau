@@ -10,24 +10,23 @@ from rules import translate, translateUnknownPos, PHRASE_RULES
 
 def translateAndPrint(text, debug):
 	doc = nlp(text)
-	tree = doc.print_tree()[0]
-	
-	if debug:
-		print(json.dumps(doc.print_tree(), indent=2))
-	
-	#print(translate(tree, NP_RULES).inflect({"nominatiivi"}))
-	if tree["POS_coarse"] == "VERB":
-		fitree = translate(tree, PHRASE_RULES)
+	for tree in doc.print_tree():
 		if debug:
-			fitree.printTree()
+			print(json.dumps(doc.print_tree(), indent=2))
 		
-		print(fitree.inflect({"nominatiivi"}))
-	else:
-		fitree = translateUnknownPos(tree)
-		if debug:
-			fitree.printTree()
-		
-		print(fitree.inflect(set()))
+		#print(translate(tree, NP_RULES).inflect({"nominatiivi"}))
+		if tree["POS_coarse"] == "VERB":
+			fitree = translate(tree, PHRASE_RULES)
+			if debug:
+				fitree.printTree()
+			
+			print(fitree.inflect({"nominatiivi"}))
+		else:
+			fitree = translateUnknownPos(tree)
+			if debug:
+				fitree.printTree()
+			
+			print(fitree.inflect(set()))
 
 def main():
 	parser = argparse.ArgumentParser()

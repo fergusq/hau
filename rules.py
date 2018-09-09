@@ -150,6 +150,8 @@ def translateUnknownPos(tree):
 		return translate(tree, ADVP_RULES)
 	elif tree["POS_coarse"] == "NOUN":
 		return translate(tree, NP_RULES)
+	elif tree["POS_coarse"] == "NUM":
+		return translate(tree, NP_RULES)
 	elif tree["POS_coarse"] == "VERB":
 		return translate(tree, VP_RULES)
 	elif tree["POS_coarse"] == "ADP":
@@ -289,13 +291,6 @@ def _(tree, params, rest):
 	acl = translate(params["subtree"], VP_RULES)
 	return FiA([FiA([acl], {"-tu"}), val], val.flags)
 
-# yhdyssanat
-@match(NP_RULES, {"modifiers": [{"_del": True, "_name": "prefix", "POS_coarse": "NOUN", "arc": "compound"}]})
-def _(tree, params, rest):
-	val = translate(tree, rest)
-	val2 = translate(params["prefix"], NP_RULES)
-	return FiA([niTree(val2, {"nominatiivi"}), val], val.flags, compound=True)
-
 @match(NP_RULES, {"modifiers": [{"_del": True, "_name": "proper", "POS_coarse": "PROPN", "arc": "amod"}]})
 def _(tree, params, rest):
 	val = translate(tree, rest)
@@ -389,9 +384,9 @@ def addPossPronoun(pronoun, fi_pronoun, flags):
 addPossPronoun("my", "minun", {"minun"})
 addPossPronoun("your", "sinun", {"sinun"})
 addPossPronoun({"her", "his"}, "hänen", {"hänen"})
-addPossPronoun("its", "sen", {})
+addPossPronoun("its", "sen", set())
 addPossPronoun("our", "meidän", {"meidän"})
-addPossPronoun("their", "niiden", {})
+addPossPronoun("their", "niiden", set())
 
 # the person's thing -> henkilön asia
 @match(NP_RULES, {"modifiers": [{"_del": True, "_name": "ap", "POS_coarse": "NOUN", "arc": "poss", "modifiers": [{"_del": True, "word": "'s", "POS_fine": "POS"}]}]})
@@ -416,6 +411,20 @@ def _(tree, params, rest):
 	val = translate(tree, rest)
 	val2 = translate(ap, AP_RULES)
 	return FiA([FiA([val2], {"ei omistusliitettä"}), val], val.flags)
+
+# two things -> kaksi asiaa
+@match(NP_RULES, {"modifiers": [{"_del": True, "_name": "np", "arc": "nummod"}]})
+def _(tree, params, rest):
+	val = translate(tree, rest)
+	val2 = translate(params["np"], NP_RULES)
+	
+	flags = set(val.flags)
+	if "monikko" in val2.flags:
+		pass
+		# TODO: lippujen poistaminen alemmilta tasoilta
+		# käytä "heikko partitiivi" -lippua
+	
+	return FiA([FiA([val2], {"ei omistusliitettä"}), val], flags)
 
 # very nice -> hyvin kiva
 @match(AP_RULES, {"modifiers": [{"_del": True, "_name": "ap", "POS_coarse": {"ADV", "ADP"}, "arc": "advmod"}]})
@@ -559,7 +568,7 @@ def _(tree, params, rest):
 @match(VP_RULES, {"modifiers": [{"_del": True, "lemma": "be", "arc": "aux"}]})
 def _(tree, params, rest):
 	val = translate(tree, rest)
-	return FiA([val], {})
+	return FiA([val], set())
 
 # don't do not -> ei tee
 @match(VP_RULES, {"modifiers": [{"_del": True, "word": {"not", "n't"}, "arc": "neg"}, {"_del": True, "lemma": "do", "arc": "aux"}]})
@@ -603,15 +612,15 @@ def addAuxVerb(verb, fi_verb, verbflags, compflags, phraseflags=set(), compgen=N
 		else:
 			return FiA([FiP(fi_verb, verbflags), compgen(val) if compgen else niTree(val, compflags)])
 
-addAuxVerb("must", "täytyä", {}, {"-a"}, {"nollapersoona"})
-addAuxVerb({"can", "ca"}, "voida", {}, {"-a"})
+addAuxVerb("must", "täytyä", set(), {"-a"}, {"nollapersoona"})
+addAuxVerb({"can", "ca"}, "voida", set(), {"-a"})
 addAuxVerb("could", "voida", {"konditionaali"}, {"-a"})
-addAuxVerb("may", "saattaa", {}, {"-a"})
+addAuxVerb("may", "saattaa", set(), {"-a"})
 addAuxVerb("might", "saattaa", {"konditionaali"}, {"-a"})
-addAuxVerb("shall", "saada", {}, {"-a"})
+addAuxVerb("shall", "saada", set(), {"-a"})
 addAuxVerb("should", "pitää", {"konditionaali"}, {"-a"}, {"nollapersoona"})
-addAuxVerb("will", "tulla", {}, {"-ma", "illatiivi"})
-addAuxVerb({"have", "'ve"}, "olla", {"perfektin apuverbi"}, {}, compgen=lambda val: flagsFiIf(val, {"passiivi"}, {"-tu"}, {"-nut"}))
+addAuxVerb("will", "tulla", set(), {"-ma", "illatiivi"})
+addAuxVerb({"have", "'ve"}, "olla", {"perfektin apuverbi"}, set(), compgen=lambda val: flagsFiIf(val, {"passiivi"}, {"-tu"}, {"-nut"}))
 
 # have to do -> olla tehtävä
 @match(VP_RULES, {"lemma": {"have", "'ve"}, "modifiers": [{"_del": True, "_name": "subtree", "POS_fine": "VB", "modifiers": [{"_del": True, "word": "to", "POS_fine": "TO"}]}]})
@@ -620,12 +629,20 @@ def _(tree, params, rest):
 	val2 = translate(params["subtree"], VP_RULES)
 	return FiA([FiP("olla"), niTree(val2, {"-tava"}), val])
 
-# to do doing
+# to do, doing
 @match(VP_RULES, {"modifiers": [{"_del": True, "_name": "subtree", "arc": "advcl", "POS_fine": "VBG"}]})
 def _(tree, params, rest):
 	val = translate(tree, rest)
 	val2 = translate(params["subtree"], VP_RULES)
 	val2 = FiPossSuffixFromSubject(FiA([val2], {"verbi", "-e", "inessiivi"}), sibling_flags=val.flags, no_forwarding=True)
+	return FiA([val, val2], val.flags)
+
+# to do, having done
+@match(VP_RULES, {"modifiers": [{"_del": True, "_name": "subtree", "arc": "advcl", "POS_fine": "VBN", "modifiers": [{"_del": True, "word": "having", "arc": "aux"}]}]})
+def _(tree, params, rest):
+	val = translate(tree, rest)
+	val2 = translate(params["subtree"], VP_RULES)
+	val2 = FiPossSuffixFromSubject(FiA([val2], {"verbi", "-tu", "partitiivi"}), sibling_flags=val.flags, no_forwarding=True)
 	return FiA([val, val2], val.flags)
 
 # do to do -> tehdä tehdäkseen
@@ -842,6 +859,13 @@ addVerb("remind", "muistuttaa", "partitiivi")
 for task in queue:
 	task()
 
+# yhdyssanat
+@match(NP_RULES, {"modifiers": [{"_del": True, "_name": "prefix", "POS_coarse": "NOUN", "arc": "compound"}]})
+def _(tree, params, rest):
+	val = translate(tree, rest)
+	val2 = translate(params["prefix"], NP_RULES)
+	return FiA([niTree(val2, {"nominatiivi"}), val], val.flags, compound=True)
+
 def pronounToNoun(en_noun, fi_noun, flags=None):
 	@match(NP_RULES, {"word": en_noun, "POS_coarse": {"PRON", "DET", "ADJ", "NOUN"}})
 	def _(tree, params, rest):
@@ -935,11 +959,17 @@ with open("fiwn.txt", "r") as file:
 	for i, line in enumerate(file):
 		print("\r"+str(i), end="")
 		ficode, filemma, encode, enlemma, rel = line.strip().split("\t")[:5]
-		if rel == "synonym" and ficode[:4] in trans:
-			if enlemma not in trans[ficode[:4]]:
-				trans[ficode[:4]][enlemma] = []
+		pos = ficode[:4]
+		if rel == "synonym" and pos in trans:
+			if enlemma not in trans[pos]:
+				trans[pos][enlemma] = []
 			
-			trans[ficode[:4]][enlemma].append(FiA([FiP(word) for word in filemma.split(" ")]))
+			words = [FiP(word) for word in filemma.split(" ")]
+			
+			if pos == "fi:v":
+				trans[pos][enlemma].append(FiVP(verb=words[0], subtrees=words[1:]))
+			else:
+				trans[pos][enlemma].append(FiA(words))
 
 print()
 
@@ -963,7 +993,7 @@ def _(tree, params, rest):
 	val = translate(tree, NP_RULES)
 	return FiA([val], {"essiivi"})
 
-@match(NP_RULES, {"lemma": trans["fi:n"], "POS_fine": "NN"})
+@match(NP_RULES, {"lemma": trans["fi:n"], "POS_fine": {"NN", "CD"}})
 def _(tree, params, rest):
 	val = translateRest(tree)
 	return FiA([randomTranslation(tree["lemma"], "fi:n"), val])

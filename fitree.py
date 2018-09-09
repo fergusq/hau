@@ -220,6 +220,11 @@ class FiP:
 				for key, val in PROPERTIES[flag]:
 					values[key] = val
 		
+		# heikko partitiivi lukuja varten, eli nominatiivin sijasta partitiivi
+		# esim. ei kaksi luku vaan kaksi lukua
+		if "heikko partitiivi" in flags and values["CASE"] == "NOM":
+			values["CASE"] = "PAR"
+		
 		if "POSS" in values and "POSS" not in properties and pos not in ["ADJ", "PRON"] and "ei omistusliitettä" not in flags:
 			# FIXME: adjektiiveilla ja pronomineilla voi olla joskus omistusliitteitä, mutta yleensä ei
 			# tee jotain muuta kuin tällainen purkkaehto
@@ -328,12 +333,12 @@ class FiVP:
 				(self.verb, flags),
 			] + subtree_pairs
 		elif flags & {"-minen"}:
-			template = [
+			template = subtree_pairs + [
 				(self.subj, {"genetiivi"}),
 				(self.obj, {fixed_objcase}),
 				(FiNI("ei-") if "kielto" in flags else None, set()),
 				(self.verb, flags),
-			] + subtree_pairs
+			]
 		elif flags & {"-tava", "-tu"}:
 			template = subtree_pairs + [
 				(self.subj, {"genetiivi"}),
