@@ -221,6 +221,14 @@ addCConjunction(NP_RULES, NP_RULES, "and", "ja")
 addCConjunction(NP_RULES, NP_RULES, "but", "mutta")
 addCConjunction(NP_RULES, NP_RULES, "or", "tai")
 
+addCConjunction(AP_RULES, NP_RULES, "and", "ja")
+addCConjunction(AP_RULES, NP_RULES, "but", "mutta")
+addCConjunction(AP_RULES, NP_RULES, "or", "tai")
+
+addCConjunction(AP_RULES, AP_RULES, "and", "ja")
+addCConjunction(AP_RULES, AP_RULES, "but", "mutta")
+addCConjunction(AP_RULES, AP_RULES, "or", "tai")
+
 addCConjunction(VP_RULES, VP_RULES, "and", "ja")
 addCConjunction(VP_RULES, VP_RULES, "but", "vaan")
 addCConjunction(VP_RULES, VP_RULES, "or", "tai")
@@ -239,44 +247,27 @@ def _(tree, params, rest):
 	val2 = translate(params["relcl"], PHRASE_RULES)
 	return FiA([val, FiNI(","), niTree(val2), FiNI(",")], val.flags)
 
+def addDeterminer(en_determiner, fi_determiner, det_flags=None, flags=None, pos="DT"):
+	@match(NP_RULES, {"modifiers": [{"_del": True, "word": en_determiner, "POS_fine": pos}]})
+	def _(tree, params, rest):
+		val = translate(tree, rest)
+		if fi_determiner:
+			return FiA([FiP(fi_determiner, det_flags or set()), val], val.flags|(flags or set()))
+		elif flags:
+			return FiA([val], val.flags|flags)
+		else:
+			return val
+
 # artikkelit
-@match(NP_RULES, {"modifiers": [{"_del": True, "word": {"a", "an"}, "POS_fine": "DT"}]})
-def _(tree, params, rest):
-	val = translate(tree, rest)
-	return FiA([FiP("eräs"), val], val.flags|{"epämääräinen"})
-
-@match(NP_RULES, {"modifiers": [{"_del": True, "word": "the", "POS_fine": "DT"}]})
-def _(tree, params, rest):
-	val = translate(tree, rest)
-	#return FiA([FiP("se"), val], val.flags)
-	return val
-
-# tämä, tuo, nämä, nuo
-@match(NP_RULES, {"modifiers": [{"_del": True, "word": "this", "POS_fine": "DT"}]})
-def _(tree, params, rest):
-	val = translate(tree, rest)
-	return FiA([FiP("tämä"), val], val.flags)
-
-@match(NP_RULES, {"modifiers": [{"_del": True, "word": "that", "POS_fine": "DT"}]})
-def _(tree, params, rest):
-	val = translate(tree, rest)
-	return FiA([FiP("tuo"), val], val.flags)
-
-@match(NP_RULES, {"modifiers": [{"_del": True, "word": "these", "POS_fine": "DT"}]})
-def _(tree, params, rest):
-	val = translate(tree, rest)
-	return FiA([FiP("nämä", {"monikko"}), val], val.flags)
-
-@match(NP_RULES, {"modifiers": [{"_del": True, "word": "those", "POS_fine": "DT"}]})
-def _(tree, params, rest):
-	val = translate(tree, rest)
-	return FiA([FiP("nuo", {"monikko"}), val], val.flags)
-
-# kaikki
-@match(NP_RULES, {"modifiers": [{"_del": True, "word": "all", "POS_fine": "PDT"}]})
-def _(tree, params, rest):
-	val = translate(tree, rest)
-	return FiA([FiP("kaikki"), val], val.flags)
+addDeterminer({"a", "an"}, "eräs", flags={"epämääräinen"})
+#addDeterminer("the", "se")
+addDeterminer("the", "")
+addDeterminer("this", "tämä")
+addDeterminer("that", "tuo")
+addDeterminer("these", "nämä", {"monikko"})
+addDeterminer("those", "nuo", {"monikko"})
+addDeterminer("all", "kaikki", pos="PDT")
+addDeterminer("every", "jokainen")
 
 # kuinka
 @match(AP_RULES, {"modifiers": [{"_del": True, "word": "how", "POS_fine": "WRB"}]})
@@ -297,7 +288,7 @@ def _(tree, params, rest):
 	val2 = translate(params["proper"], NP_RULES)
 	return FiA([niTree(val2, {"genetiivi"}), val], val.flags)
 
-def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_postposition=None, after=False, pp_rule=True, np_rule=True, phrase_rule=True):
+def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_postposition=None, after=False, pp_rule=True, np_rule=True, ap_rule=True, phrase_rule=True):
 	fi_pre_val = FiNI(fi_preposition or "")
 	fi_post_val = FiNI(fi_postposition or "")
 	if pp_rule:
@@ -321,8 +312,8 @@ def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_post
 			else:
 				return FiA([fi_pre_val, pp, fi_post_val, val])
 	
-	if np_rule:
-		@match(NP_RULES, {"modifiers": [{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}]})
+	def addRuleTo(target):
+		@match(target, {"modifiers": [{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}]})
 		def _(tree, params, rest):
 			val = translate(tree, rest)
 			val2 = translate(params["subtree"], NP_RULES)
@@ -331,6 +322,12 @@ def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_post
 			if after:
 				return FiA([val, verbp, fi_pre_val, pp, fi_post_val], val.flags)
 			return FiA([fi_pre_val, pp, fi_post_val, verbp, val], val.flags)
+	
+	if np_rule:
+		addRuleTo(NP_RULES)
+	
+	if ap_rule:
+		addRuleTo(AP_RULES)
 	
 	if phrase_rule:
 		@match(PHRASE_RULES, {"word": "was", "POS_fine": "VBD", "modifiers": [
@@ -352,7 +349,7 @@ def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_post
 	#	val2 = translate(params["subtree"], NP_RULES)
 	#	return FiA([val, niTree(val2, {case})], val.flags)
 
-prepositionToCase("of", "genetiivi", pp_rule=False)
+prepositionToCase("of", "genetiivi", pp_rule=False, ap_rule=False)
 prepositionToCase("of", "elatiivi", np_rule=False, phrase_rule=False)
 prepositionToCase("on", "adessiivi", "olla")
 prepositionToCase("at", "adessiivi", "olla")
@@ -368,7 +365,8 @@ prepositionToCase("with", "genetiivi", fi_postposition="kanssa")
 prepositionToCase("over", "genetiivi", fi_postposition="yli")
 prepositionToCase("after", "genetiivi", fi_postposition="jälkeen")
 prepositionToCase("before", "partitiivi", fi_postposition="ennen")
-prepositionToCase("like", "nominatiivi", fi_preposition="kuten")
+prepositionToCase("like", "nominatiivi", fi_preposition="kuten") # TODO voisiko nominatiivin sijasta taipua samoin kuin pääsanansa?
+prepositionToCase("unlike", "nominatiivi", fi_preposition="toisin kuten")
 prepositionToCase("above", "genetiivi", fi_postposition="yllä")
 prepositionToCase("below", "genetiivi", fi_postposition="alla")
 prepositionToCase("up", "partitiivi", fi_preposition="ylös")
@@ -498,12 +496,12 @@ def _(tree, params, rest):
 	# TODO: predikatiivimuoto erikseen: kykenevä tekemään
 	return FiA([niTree(val2, {"-minen", "illatiivi"}), FiP("kykenevä"), val])
 
-def addAdjective(en_adj, fi_adj):
+def addAdjective(en_adj, fi_adj, flags=None):
 	# TODO vertailumuodot
 	@match(AP_RULES, {"lemma": en_adj, "POS_coarse": "ADJ"})
 	def _(tree, params, rest):
 		val = translateRest(tree)
-		return FiA([FiP(fi_adj), val])
+		return FiA([FiP(fi_adj, {"adjektiivi"}|(flags or set())), val])
 
 addAdjective("good", "hyvä")
 addAdjective("new", "uusi")
@@ -531,6 +529,7 @@ addAdjective("bad", "huono")
 addAdjective("same", "sama")
 
 addAdjective("left", "vasen")
+addAdjective("most", "usea", {"superlatiivi"})
 
 def addAdverb(en_adv, fi_adv, flags=set()):
 	@match(ADVP_RULES, {"lemma": en_adv, "POS_coarse": "ADV"})
@@ -713,12 +712,19 @@ def _(tree, params, rest):
 	val2 = translate(params["subtree"], NP_RULES)
 	return FiA([niTree(val2, {"genetiivi"}), FiNI("toimesta"), val])
 
-# as something -> kuin jokin
-@match(PP_RULES, {"word": "as", "POS_fine": "IN", "modifiers": [{"_name": "subtree", "_del": True, "POS_coarse": "NOUN"}]})
+# as/like something -> kuten jokin
+@match(PP_RULES, {"word": {"as", "like"}, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "_del": True}]})
 def _(tree, params, rest):
 	val = translateRest(tree)
-	val2 = translate(params["subtree"], NP_RULES)
-	return FiA([val, FiNI("kuin"), niTree(val2, {"nominatiivi"})])
+	val2 = translateUnknownPos(params["subtree"])
+	return FiA([val, FiNI("kuten"), val2])
+
+# unlike something -> kuten jokin
+@match(PP_RULES, {"word": "as", "POS_fine": "IN", "modifiers": [{"_name": "subtree", "_del": True}]})
+def _(tree, params, rest):
+	val = translateRest(tree)
+	val2 = translateUnknownPos(params["subtree"])
+	return FiA([val, FiNI("toisin kuten"), val2])
 
 @match(AP_RULES, {"modifiers": [{"_del": True, "word": "as", "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}]})
 def _(tree, params, rest):

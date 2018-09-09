@@ -179,7 +179,7 @@ class FiP:
 				if flag not in PROPERTIES:
 					continue
 				for key, _ in PROPERTIES[flag]:
-					if key != "POSS":
+					if key not in {"POSS", "DRV"}: # nämä ominaisuudet eivät ilmene perusmuodossa
 						wanted_properties.add(key)
 			
 			properties = None
@@ -229,6 +229,9 @@ class FiP:
 			# FIXME: adjektiiveilla ja pronomineilla voi olla joskus omistusliitteitä, mutta yleensä ei
 			# tee jotain muuta kuin tällainen purkkaehto
 			properties.append("POSS")
+		
+		if "DRV" in values and "CMP" in values and pos == "ADJ":
+			properties.insert(properties.index("UPOS")+1, "DRV")
 		
 		omorfi_code = prefix
 		for p in properties:
@@ -391,6 +394,9 @@ class FiA:
 			ans = ""
 			for expr in self.exprs:
 				word = expr.inflect(flags).strip()
+				if not word:
+					continue
+				
 				if ans.endswith("nen"):
 					ans = ans[:-3] + "s"
 				
