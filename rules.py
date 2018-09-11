@@ -247,7 +247,7 @@ def _(tree, params, rest):
 def _(tree, params, rest):
 	val = translate(tree, rest)
 	val2 = translate(params["relcl"], PHRASE_RULES)
-	return FiA([val, FiNI(","), niTree(val2), FiNI(",")], val.flags)
+	return FiA([val, FiNI("("), niTree(val2), FiNI(")")], val.flags)
 
 def addDeterminer(en_determiner, fi_determiner, det_flags=None, flags=None, pos="DT"):
 	@match(NP_RULES, {"modifiers": [{"_del": True, "word": en_determiner, "POS_fine": pos}]})
@@ -290,11 +290,11 @@ def _(tree, params, rest):
 	val2 = translate(params["proper"], NP_RULES)
 	return FiA([niTree(val2, {"genetiivi"}), val], val.flags)
 
-def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_postposition=None, after=False, pp_rule=True, np_rule=True, ap_rule=True, phrase_rule=True):
+def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_postposition=None, after=False, pp_rule=True, np_rule=True, ap_rule=True, vp_rule=True):
 	fi_pre_val = FiNI(fi_preposition or "")
 	fi_post_val = FiNI(fi_postposition or "")
 	if pp_rule:
-		@match(PP_RULES, {"word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "_del": True, "POS_coarse": {"NOUN", "PROPN", "PRON"}}]})
+		@match(PP_RULES, {"word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "_del": True, "POS_coarse": {"NOUN", "PROPN", "PRON", "NUM"}}]})
 		def _(tree, params, rest):
 			val = translateRest(tree)
 			val2 = translate(params["subtree"], NP_RULES)
@@ -315,7 +315,7 @@ def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_post
 				return FiA([fi_pre_val, pp, fi_post_val, val])
 	
 	def addRuleTo(target):
-		@match(target, {"modifiers": [{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}]})
+		@match(target, {"modifiers": [{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": {"NOUN", "PROPN", "PRON", "NUM"}}]}]})
 		def _(tree, params, rest):
 			val = translate(tree, rest)
 			val2 = translate(params["subtree"], NP_RULES)
@@ -331,28 +331,21 @@ def prepositionToCase(preposition, case, verb=None, fi_preposition=None, fi_post
 	if ap_rule:
 		addRuleTo(AP_RULES)
 	
-	if phrase_rule:
-		@match(PHRASE_RULES, {"word": "was", "POS_fine": "VBD", "modifiers": [
+	if vp_rule:
+		@match(VP_RULES, {"lemma": "be", "modifiers": [
 			{"lemma": "there", "_del": True, "POS_fine": "EX"},
 			{"_name": "subj", "_del": True, "modifiers": [
-				{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}
+				{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": {"NOUN", "PROPN", "PRON", "NUM"}}]}
 			]}
 		]})
 		def _(tree, params, rest):
 			val = translateRest(tree)
 			subj = translate(params["subj"], NP_RULES)
 			place = translate(params["subtree"], NP_RULES)
-			verbp = niTree(FiP(verb or "olla"), {"verbi", "preteriti", "yks_3"})
-			return FiA([niTree(subj, {"nominatiivi"}), verbp, fi_pre_val, niTree(place, {case}), fi_post_val, val])
-	
-	#@match(PHRASE_RULES, {"modifiers": [{"_del": True, "word": preposition, "POS_fine": "IN", "modifiers": [{"_name": "subtree", "POS_coarse": "NOUN"}]}]})
-	#def _(tree, params, rest):
-	#	val = translate(tree, rest)
-	#	val2 = translate(params["subtree"], NP_RULES)
-	#	return FiA([val, niTree(val2, {case})], val.flags)
+			return FiVP(verb=FiP(verb or "olla"), subj=subj, subtrees=[FiA([fi_pre_val, niTree(place, {case}), fi_post_val]), val])
 
 prepositionToCase("of", "genetiivi", pp_rule=False, ap_rule=False)
-prepositionToCase("of", "elatiivi", np_rule=False, phrase_rule=False)
+prepositionToCase("of", "elatiivi", np_rule=False, vp_rule=False)
 prepositionToCase("on", "adessiivi", "olla")
 prepositionToCase("at", "adessiivi", "olla")
 prepositionToCase("to", "illatiivi", "mennä")
@@ -373,6 +366,7 @@ prepositionToCase("above", "genetiivi", fi_postposition="yllä")
 prepositionToCase("below", "genetiivi", fi_postposition="alla")
 prepositionToCase("up", "partitiivi", fi_preposition="ylös")
 prepositionToCase("down", "partitiivi", fi_preposition="alas")
+prepositionToCase("since", "elatiivi", fi_postposition="asti")
 
 # his thing -> hänen asiansa
 def addPossPronoun(pronoun, fi_pronoun, flags):
@@ -757,7 +751,7 @@ def addVerb(en_verb, verb, object_case):
 	obj_pattern_noun["_del"] = True
 	obj_pattern_adj["_del"] = True
 	
-	@match(PHRASE_RULES, {"word": "was", "POS_fine": "VBD", "modifiers": [
+	@match(VP_RULES, {"modifiers": [
 		{"lemma": "there", "_del": True, "POS_fine": "EX"},
 		{"_name": "subj", "_del": True, "modifiers": [{"word": en_verb, "POS_fine": "VBG", "modifiers": [obj_pattern_noun]}]}
 	]})
@@ -766,7 +760,7 @@ def addVerb(en_verb, verb, object_case):
 		subj = translate(params["subj"], NP_RULES)
 		place = translate(params["obj"], NP_RULES)
 		case = handleAccusative(place)
-		return FiA([niTree(subj, {"nominatiivi"}), niTree(FiP(verb, {"verbi"}), {"preteriti", "yks_3"}), niTree(place, {case}), val])
+		return FiVP(verb=FiP(verb, {"verbi"}), subj=subj, subtrees=[niTree(place, {case}), val])
 	
 	def addObjVerbRule(obj_pattern, obj_rules):
 		# TODO muut lauseenjäsenet
@@ -862,6 +856,7 @@ addVerb("become", "tulla", "translatiivi")
 addVerb("compare", "verrata", "partitiivi")
 addVerb("compare to", "verrata", "partitiivi")
 addVerb("remind", "muistuttaa", "partitiivi")
+addVerb("depend on", "riippua", "elatiivi")
 
 # suorita verbien objektittomien muotojen lisääminen (jotka pitää lisätä aina kaikkien muiden muotojen jälkeen)
 for task in queue:

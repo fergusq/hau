@@ -418,6 +418,10 @@ class FiA:
 				word = expr.inflect(flags).strip()
 				if ans and ans[-1] == "-" and " " not in ans and " " not in word:
 					ans = ans[:-1]
+				elif ans and ans[-1] == "(":
+					pass
+				elif word and word[0] in {")", ",", ".", "!", "?"}:
+					pass
 				elif ans and word:
 					ans += " "
 				
