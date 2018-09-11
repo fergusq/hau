@@ -10,7 +10,9 @@ def matchesObj(pattern, obj):
 		return obj in pattern, ans
 	elif type(pattern) != type(obj):
 		return False, None
-	elif isinstance(pattern, str) or isinstance(pattern, int):
+	elif isinstance(pattern, str):
+		return pattern.lower() == obj.lower(), ans
+	elif isinstance(pattern, int):
 		return pattern == obj, ans
 	elif isinstance(pattern, list):
 		for pat in pattern:

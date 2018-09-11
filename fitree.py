@@ -328,14 +328,14 @@ class FiVP:
 		pretrees = [(st, set()) for st in self.subtrees if "lauseen alkuun" in st.flags]
 		posttrees = [(st, set()) for st in self.subtrees if "lauseen alkuun" not in st.flags]
 		
-		if flags & {"-a", "-e", "-va", "-nut"}:
+		if flags & {"-a", "-e"}:
 			template = [
 				(self.subj, {"genetiivi"}),
 				(self.obj, {fixed_objcase}),
 				(FiNI("ei-") if "kielto" in flags else None, set()),
 				(self.verb, flags),
 			] + subtree_pairs
-		elif flags & {"-minen"}:
+		elif flags & {"-minen", "-va", "-nut"}:
 			template = subtree_pairs + [
 				(self.subj, {"genetiivi"}),
 				(self.obj, {fixed_objcase}),
