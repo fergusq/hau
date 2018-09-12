@@ -5,10 +5,11 @@ import readline
 import spacy
 nlp = spacy.load("en_core_web_sm", disable=["ner"])
 
-from settings import setDebugMode
+import settings
 from rules import translate, translateUnknownPos, PHRASE_RULES
 
 def translateAndPrint(text, debug):
+	settings.beginTranslation()
 	doc = nlp(text)
 	for tree in doc.print_tree():
 		if debug:
@@ -17,16 +18,18 @@ def translateAndPrint(text, debug):
 		#print(translate(tree, NP_RULES).inflect({"nominatiivi"}))
 		if tree["POS_coarse"] == "VERB":
 			fitree = translate(tree, PHRASE_RULES)
-			if debug:
-				fitree.printTree()
-			
-			print(fitree.inflect({"nominatiivi"}))
+			flags = {"nominatiivi"}
 		else:
 			fitree = translateUnknownPos(tree)
-			if debug:
-				fitree.printTree()
+			flags = set()
+		
+		if debug:
+			for tr_pair in settings.tr_pairs:
+				print(tr_pair.enlemma, "->", tr_pair.filemma)
 			
-			print(fitree.inflect(set()))
+			fitree.printTree()
+		
+		print(fitree.inflect(flags))
 
 def main():
 	parser = argparse.ArgumentParser()
@@ -34,7 +37,7 @@ def main():
 	parser.add_argument("-d", "--debug", action="store_true", help="enable debug mode")
 	args = parser.parse_args()
 	
-	setDebugMode(args.debug)
+	settings.setDebugMode(args.debug)
 	
 	if args.text:
 		translateAndPrint(args.text, args.debug)

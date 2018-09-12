@@ -1,7 +1,7 @@
 import copy
-import random
 
 from fitree import FiP, FiVP, FiA, niTree, FiNI, FiIf, flagsFiIf, fixAccusative, FiPossSuffixFromSubject
+from fiwn import randomTranslation, trans
 import settings
 
 def matchesObj(pattern, obj):
@@ -196,13 +196,14 @@ def addConjunction(en_conj, fi_conj):
 	def _(tree, params, rest):
 		val = translate(tree, rest)
 		val2 = translate(params["subtree"], PHRASE_RULES)
-		return FiA([val, FiNI(","), FiNI(fi_conj), niTree(val2), FiNI(",")], val.flags)
+		return FiA([val, FiNI("("), FiNI(fi_conj), niTree(val2), FiNI(")")], val.flags)
 
 addConjunction("if", "jos")
 addConjunction("unless", "paitsi jos")
 addConjunction("while", "kun")
 addConjunction("until", "kunnes")
 addConjunction("for", "sillä")
+addConjunction("as", "kuin")
 
 # rinnastuskonjunktiot
 def addCConjunction(target_rules, cc_rules, en_conj, fi_conj):
@@ -952,34 +953,6 @@ nounToNoun("group", "joukko")
 nounToNoun("problem", "ongelma")
 nounToNoun("fact", "tosiasia")
 
-trans = {
-	"fi:n": {},
-	"fi:a": {},
-	"fi:v": {},
-	"fi:r": {}
-}
-with open("fiwn.txt", "r") as file:
-	for i, line in enumerate(file):
-		print("\r"+str(i), end="")
-		ficode, filemma, encode, enlemma, rel = line.strip().split("\t")[:5]
-		pos = ficode[:4]
-		if rel == "synonym" and pos in trans:
-			if enlemma not in trans[pos]:
-				trans[pos][enlemma] = []
-			
-			words = [FiP(word) for word in filemma.split(" ")]
-			
-			if pos == "fi:v":
-				trans[pos][enlemma].append(FiVP(verb=words[0], subtrees=words[1:]))
-			else:
-				trans[pos][enlemma].append(FiA(words))
-
-print()
-
-def randomTranslation(word, pos):
-	translations = trans[pos][word]
-	return random.choice(translations)
-
 @match(AP_RULES, {"lemma": trans["fi:a"], "POS_coarse": "ADJ"})
 def _(tree, params, rest):
 	val = translateRest(tree)
@@ -1013,7 +986,8 @@ def _(tree, params, rest):
 	val = translateRestToArray(tree)
 	subj = translate(params["subj"], NP_RULES)
 	obj = translate(params["obj"], NP_RULES)
-	return FiVP(randomTranslation(tree["lemma"], "fi:v"), subj=subj, obj=obj, subtrees=val)
+	verb, subtrees, objcase = randomTranslation(tree["lemma"], "fi:v")
+	return FiVP(verb, subj=subj, obj=obj, objcase=objcase, subtrees=subtrees+val)
 
 @match(VP_RULES, {"lemma": trans["fi:v"], "POS_coarse": "VERB", "modifiers": [
 	{"_name": "subj", "_del": True, "arc": "nsubj"}
@@ -1021,7 +995,8 @@ def _(tree, params, rest):
 def _(tree, params, rest):
 	val = translateRestToArray(tree)
 	subj = translate(params["subj"], NP_RULES)
-	return FiVP(randomTranslation(tree["lemma"], "fi:v"), subj=subj, subtrees=val)
+	verb, subtrees, objcase = randomTranslation(tree["lemma"], "fi:v")
+	return FiVP(verb, subj=subj, objcase=objcase, subtrees=subtrees+val)
 
 @match(VP_RULES, {"lemma": trans["fi:v"], "POS_coarse": "VERB", "modifiers": [
 	{"_name": "obj", "_del": True, "arc": "dobj"}
@@ -1029,12 +1004,14 @@ def _(tree, params, rest):
 def _(tree, params, rest):
 	val = translateRestToArray(tree)
 	obj = translate(params["obj"], NP_RULES)
-	return FiVP(randomTranslation(tree["lemma"], "fi:v"), obj=obj, subtrees=val)
+	verb, subtrees, objcase = randomTranslation(tree["lemma"], "fi:v")
+	return FiVP(verb, obj=obj, objcase=objcase, subtrees=subtrees+val)
 
 @match(VP_RULES, {"lemma": trans["fi:v"], "POS_coarse": "VERB"})
 def _(tree, params, rest):
 	val = translateRestToArray(tree)
-	return FiVP(randomTranslation(tree["lemma"], "fi:v"), subtrees=val)
+	verb, subtrees, objcase = randomTranslation(tree["lemma"], "fi:v")
+	return FiVP(verb, objcase=objcase, subtrees=subtrees+val)
 
 @match(NP_RULES, {"POS_fine": "NNP"})
 def _(tree, params, rest):
