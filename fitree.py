@@ -71,8 +71,8 @@ class FiP:
 		self.word = word
 		self.flags = flags or set()
 	
-	def printTree(self, indent=0):
-		print(" "*indent + repr(self.word) + repr(self.flags))
+	def printTree(self, indent=""):
+		print(indent + repr(self.word) + repr(self.flags))
 	
 	def inflect(self, par_flags):
 		flags = par_flags | self.flags
@@ -263,19 +263,34 @@ class FiVP:
 		self.forwarded_flags = set() # liput jotka annetaan lapsille
 		self.addSubjectBasedFlags()
 	
-	def printTree(self, indent=0):
-		print(" "*indent + "VP" + repr(self.flags))
-		print(" "*indent + " predicate")
-		self.verb.printTree(indent+2)
+	def printTree(self, indent=""):
+		print(indent + "VP" + repr(self.flags))
+		print(indent + "|->predicate")
+		if self.subj or self.obj or self.subtrees:
+			self.verb.printTree(indent+"|   ")
+		else:
+			self.verb.printTree(indent+"    ")
+		
 		if self.subj:
-			print(" "*indent + " subject")
-			self.subj.printTree(indent+2)
+			print(indent + "|->subject")
+			if self.subtrees or self.obj:
+				self.subj.printTree(indent+"|   ")
+			else:
+				self.subj.printTree(indent+"    ")
+		
 		if self.obj:
-			print(" "*indent + " object/" + self.objcase)
-			self.obj.printTree(indent+2)
-		for st in self.subtrees:
-			print(" "*indent + " subtree")
-			st.printTree(indent+2)
+			print(indent + "|->object/" + self.objcase)
+			if self.subtrees:
+				self.obj.printTree(indent+"|   ")
+			else:
+				self.obj.printTree(indent+"    ")
+		
+		for i, st in enumerate(self.subtrees):
+			print(indent + "|->subtree")
+			if i == len(self.subtrees)-1:
+				st.printTree(indent+"    ")
+			else:
+				st.printTree(indent+"|   ")
 	
 	def addSubjectBasedFlags(self):
 		if not self.subj:
@@ -378,11 +393,14 @@ class FiA:
 		self.compound = compound
 		self.no_forwarding = no_forwarding
 	
-	def printTree(self, indent=0):
-		print(" "*indent + "A" + repr(self.flags) + " compound=" + repr(self.compound) + " no_forwarding=" + repr(self.no_forwarding))
-		for expr in self.exprs:
-			print(" "*indent + " subtree")
-			expr.printTree(indent+2)
+	def printTree(self, indent=""):
+		print(indent + "A" + repr(self.flags) + " compound=" + repr(self.compound) + " no_forwarding=" + repr(self.no_forwarding))
+		for i, expr in enumerate(self.exprs):
+			print(indent + "|->subtree")
+			if i == len(self.exprs)-1:
+				expr.printTree(indent+"    ")
+			else:
+				expr.printTree(indent+"|   ")
 	
 	def inflect(self, flags):
 		if self.no_forwarding:
@@ -437,8 +455,8 @@ class FiNI:
 		self.word = word
 		self.flags = set()
 	
-	def printTree(self, indent=0):
-		print(" "*indent + repr(self.word) + " (NI)")
+	def printTree(self, indent=""):
+		print(indent + repr(self.word) + " (NI)")
 	
 	def inflect(self, flags):
 		return self.word
@@ -452,12 +470,12 @@ class FiIf:
 		self.no_forwarding = no_forwarding
 		self.flags = flags
 	
-	def printTree(self, indent=0):
-		print(" "*indent + "If" + repr(self.flags) + " cond=" + repr(self.condflags) + " neg=" + repr(self.neg) + " no_forwarding=" + repr(self.no_forwarding))
-		print(" "*indent + " then")
-		self.thenp.printTree(indent+2)
-		print(" "*indent + " else")
-		self.elsep.printTree(indent+2)
+	def printTree(self, indent=""):
+		print(indent + "If" + repr(self.flags) + " cond=" + repr(self.condflags) + " neg=" + repr(self.neg) + " no_forwarding=" + repr(self.no_forwarding))
+		print(indent + "|->then")
+		self.thenp.printTree(indent+"|   ")
+		print(indent + "|->else")
+		self.elsep.printTree(indent+"    ")
 	
 	def inflect(self, flags):
 		cond = flags & self.condflags
@@ -486,9 +504,9 @@ class FiPossSuffixFromSubject:
 		self.no_forwarding = no_forwarding
 		self.sibling_flags = sibling_flags
 	
-	def printTree(self, indent):
-		print(" "*indent + "PossSuffixFromSubject" + repr(self.flags) + " no_forwarding=" + repr(self.no_forwarding) + " sibling_flags=" + repr(self.sibling_flags))
-		self.subtree.printTree(indent+1)
+	def printTree(self, indent=""):
+		print(indent + "PossSuffixFromSubject" + repr(self.flags) + " no_forwarding=" + repr(self.no_forwarding) + " sibling_flags=" + repr(self.sibling_flags))
+		self.subtree.printTree(indent+" ")
 	
 	def inflect(self, flags):
 		condclags = flags|self.sibling_flags
