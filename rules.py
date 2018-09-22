@@ -609,6 +609,7 @@ def addAuxVerb(verb, fi_verb, verbflags, compflags, phraseflags=set(), compgen=N
 			return FiA([FiP(fi_verb, verbflags), compgen(val) if compgen else niTree(val, compflags)])
 
 addAuxVerb("must", "täytyä", set(), {"-a"}, {"nollapersoona"})
+addAuxVerb("need", "tarvita", set(), {"-a"}, {"nollapersoona"})
 addAuxVerb({"can", "ca"}, "voida", set(), {"-a"})
 addAuxVerb("could", "voida", {"konditionaali"}, {"-a"})
 addAuxVerb("may", "saattaa", set(), {"-a"})
