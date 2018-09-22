@@ -317,7 +317,9 @@ class FiVP:
 		flags -= {"subjekti yks_1", "subjekti yks_2", "subjekti yks_3", "subjekti mon_1", "subjekti mon_2", "subjekti mon_3"}
 		
 		if "finiitti" in flags: # täydennä persoona subjektin perusteella
-			if "subjekti yks_1" in self.flags:
+			if "nollapersoona" in self.flags:
+				flags |= {"yks_3"}
+			elif "subjekti yks_1" in self.flags:
 				flags |= {"yks_1"}
 			elif "subjekti yks_2" in self.flags:
 				flags |= {"yks_2"}
