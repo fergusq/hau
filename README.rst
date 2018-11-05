@@ -11,7 +11,7 @@ It uses the SpaCy library to parse English and Omorfi to generate Finnish words.
 Riippuvuudet
 ============
 
-Hau-kääntäjä käyttää `SpaCy-kirjastoa <spacy_>`_ englannin jäsentämiseen ja `Omorfia <omorfi>_`_ suomen sanojen taivuttamiseen.
+Hau-kääntäjä käyttää `SpaCy-kirjastoa <spacy_>`_ englannin jäsentämiseen ja `Omorfia <omorfi_>`_ suomen sanojen taivuttamiseen.
 Molemmat kirjastot on asennettava ennen käyttöä. Lisäksi SpaCylle on ladattava enlannin kielen malli
 (esim. ``en_core_web_sm``, määritelty ``hau.py``-tiedostossa).
 
